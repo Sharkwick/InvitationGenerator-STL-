@@ -10,25 +10,20 @@ st.set_page_config(page_title="Bulk PDF Filler", layout="centered")
 st.title("📄 Bulk PDF Filler")
 st.markdown("Upload a fillable PDF template and a CSV file. Map fields and download all filled PDFs.")
 
-# Upload PDF template
 template_file = st.file_uploader("Upload Fillable PDF Template", type=["pdf"])
-# Upload CSV file
 csv_file = st.file_uploader("Upload CSV File", type=["csv"])
 
 if template_file and csv_file:
-    # Save template to temp file
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_template:
         tmp_template.write(template_file.read())
         template_path = tmp_template.name
 
-    # Read CSV
     df = pd.read_csv(csv_file)
 
-    # Extract form fields from template
     form_fields = fillpdfs.get_form_fields(template_path)
     field_names = list(form_fields.keys())
 
-    st.subheader("🧩 Field Mapping")
+    st.subheader("Field Mapping")
     st.markdown("Map CSV columns to PDF form fields:")
 
     mapping = {}
@@ -49,7 +44,6 @@ if template_file and csv_file:
                 fillpdfs.flatten_pdf(output_path, output_path)
                 pdf_paths.append(output_path)
 
-            # Create ZIP
             zip_path = os.path.join(tmp_dir, "filled_pdfs.zip")
             with zipfile.ZipFile(zip_path, "w") as zipf:
                 for pdf in pdf_paths:
