@@ -1,6 +1,4 @@
 streamlit
 pandas
-tempfile
-os
-zipfile
-fillpdf
+fillpdfs
+pdf2image
