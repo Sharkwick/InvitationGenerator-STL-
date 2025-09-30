@@ -4,32 +4,26 @@ import tempfile
 import os
 import zipfile
 from fillpdf import fillpdfs
-from pdf2image import convert_from_path
 
-st.set_page_config(page_title="Bulk PDF to JPEG Generator", layout="centered")
+st.set_page_config(page_title="Bulk PDF Filler", layout="centered")
 
-st.title("🖼️ Bulk PDF to JPEG Generator")
-st.markdown("Upload a fillable PDF template and a CSV file. Map fields and download all filled PDFs as JPEG images.")
+st.title("📄 Bulk PDF Filler")
+st.markdown("Upload a fillable PDF template and a CSV file. Map fields and download all filled PDFs.")
 
-# Upload PDF template
 template_file = st.file_uploader("Upload Fillable PDF Template", type=["pdf"])
-# Upload CSV file
 csv_file = st.file_uploader("Upload CSV File", type=["csv"])
 
 if template_file and csv_file:
-    # Save template to temp file
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_template:
         tmp_template.write(template_file.read())
         template_path = tmp_template.name
 
-    # Read CSV
     df = pd.read_csv(csv_file)
 
-    # Extract form fields from template
     form_fields = fillpdfs.get_form_fields(template_path)
     field_names = list(form_fields.keys())
 
-    st.subheader("🧩 Field Mapping")
+    st.subheader("Field Mapping")
     st.markdown("Map CSV columns to PDF form fields:")
 
     mapping = {}
@@ -38,33 +32,22 @@ if template_file and csv_file:
         if selected_column != "--None--":
             mapping[field] = selected_column
 
-    flatten = st.checkbox("🔒 Flatten PDFs before converting to JPEG", value=True)
-
-    if st.button("Generate JPEGs"):
+    if st.button("Generate PDFs"):
         with tempfile.TemporaryDirectory() as tmp_dir:
-            jpeg_paths = []
+            pdf_paths = []
 
             for index, row in df.iterrows():
                 data_dict = {pdf_field: str(row[csv_col]) for pdf_field, csv_col in mapping.items()}
-                filled_pdf_path = os.path.join(tmp_dir, f"{row[mapping[field_names[0]]]}_filled.pdf")
+                output_path = os.path.join(tmp_dir, f"{row[mapping[field_names[0]]]}_filled.pdf")
 
-                # Fill and optionally flatten
-                fillpdfs.write_fillable_pdf(template_path, filled_pdf_path, data_dict)
-                if flatten:
-                    fillpdfs.flatten_pdf(filled_pdf_path, filled_pdf_path)
+                fillpdfs.write_fillable_pdf(template_path, output_path, data_dict)
+                fillpdfs.flatten_pdf(output_path, output_path)
+                pdf_paths.append(output_path)
 
-                # Convert to JPEG
-                images = convert_from_path(filled_pdf_path, dpi=200)
-                for i, img in enumerate(images):
-                    jpeg_path = os.path.join(tmp_dir, f"{row[mapping[field_names[0]]]}_page{i+1}.jpg")
-                    img.save(jpeg_path, "JPEG")
-                    jpeg_paths.append(jpeg_path)
-
-            # Create ZIP
-            zip_path = os.path.join(tmp_dir, "filled_jpegs.zip")
+            zip_path = os.path.join(tmp_dir, "filled_pdfs.zip")
             with zipfile.ZipFile(zip_path, "w") as zipf:
-                for jpeg in jpeg_paths:
-                    zipf.write(jpeg, arcname=os.path.basename(jpeg))
+                for pdf in pdf_paths:
+                    zipf.write(pdf, arcname=os.path.basename(pdf))
 
             with open(zip_path, "rb") as f:
-                st.download_button("📥 Download All JPEGs as ZIP", f, file_name="filled_jpegs.zip", mime="application/zip")
+                st.download_button("📥 Download All PDFs as ZIP", f, file_name="filled_pdfs.zip", mime="application/zip")

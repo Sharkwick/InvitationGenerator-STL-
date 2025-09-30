@@ -1,4 +1,3 @@
 streamlit
 pandas
-fillpdfs
-pdf2image
+fillpdf
