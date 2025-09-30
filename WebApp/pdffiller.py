@@ -4,7 +4,7 @@ import tempfile
 import os
 import zipfile
 from fillpdf import fillpdfs
-import fitz  # PyMuPDF
+from pdf2image import convert_from_path
 
 st.set_page_config(page_title="Bulk PDF to JPEG Generator", layout="centered")
 
@@ -53,12 +53,11 @@ if template_file and csv_file:
                 if flatten:
                     fillpdfs.flatten_pdf(filled_pdf_path, filled_pdf_path)
 
-                # Convert to JPEG using PyMuPDF
-                doc = fitz.open(filled_pdf_path)
-                for i, page in enumerate(doc):
-                    pix = page.get_pixmap(dpi=200)
+                # Convert to JPEG
+                images = convert_from_path(filled_pdf_path, dpi=200)
+                for i, img in enumerate(images):
                     jpeg_path = os.path.join(tmp_dir, f"{row[mapping[field_names[0]]]}_page{i+1}.jpg")
-                    pix.save(jpeg_path)
+                    img.save(jpeg_path, "JPEG")
                     jpeg_paths.append(jpeg_path)
 
             # Create ZIP
