@@ -26,7 +26,12 @@ preview_name = st.text_input("Preview Name", value="Sample Name")
 
 # Load default font
 def load_default_font(font_size):
-    return ImageFont.truetype("arial.ttf", font_size)
+    try:
+        return ImageFont.truetype("arial.ttf", font_size)
+    except:
+        # Fallback to DejaVuSans (bundled with Pillow)
+        fallback_path = os.path.join(os.path.dirname(ImageFont.__file__), "fonts", "DejaVuSans.ttf")
+        return ImageFont.truetype(fallback_path, font_size)
 
 # Calculate X position based on alignment
 def calculate_x_position(alignment, image_width, text_width, margin=10):
