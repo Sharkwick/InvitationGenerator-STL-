@@ -1,70 +1,98 @@
 import streamlit as st
+from PIL import Image, ImageDraw, ImageFont
 import pandas as pd
-import tempfile
-import os
 import zipfile
-from fillpdf import fillpdfs
-from pdf2image import convert_from_path
+import io
+import os
 
-st.set_page_config(page_title="Bulk PDF to JPEG Generator", layout="centered")
+st.set_page_config(page_title="Invitation Generator", layout="centered")
+st.title("🎉 Invitation Generator")
 
-st.title("🖼️ Bulk PDF to JPEG Generator")
-st.markdown("Upload a fillable PDF template and a CSV file. Map fields and download all filled PDFs as JPEG images.")
+# Upload template image
+template_file = st.file_uploader("Upload Invitation Template Image", type=["png", "jpg", "jpeg"])
+# Upload CSV
+csv_file = st.file_uploader("Upload CSV with Names", type=["csv"])
 
-# Upload PDF template
-template_file = st.file_uploader("Upload Fillable PDF Template", type=["pdf"])
-# Upload CSV file
-csv_file = st.file_uploader("Upload CSV File", type=["csv"])
+# Font customization
+font_size = st.slider("Font Size", min_value=10, max_value=100, value=40)
+font_color = st.color_picker("Font Color", "#000000")
 
-if template_file and csv_file:
-    # Save template to temp file
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_template:
-        tmp_template.write(template_file.read())
-        template_path = tmp_template.name
+# Vertical position and horizontal alignment
+y_percent = st.slider("Y Position (%)", min_value=0, max_value=100, value=50)
+alignment = st.selectbox("Horizontal Alignment", ["Left", "Center", "Right"])
 
-    # Read CSV
-    df = pd.read_csv(csv_file)
+# Preview name
+preview_name = st.text_input("Preview Name", value="Sample Name")
 
-    # Extract form fields from template
-    form_fields = fillpdfs.get_form_fields(template_path)
-    field_names = list(form_fields.keys())
+# Load default font
+def load_default_font(font_size):
+    return ImageFont.truetype("arial.ttf", font_size)
 
-    st.subheader("🧩 Field Mapping")
-    st.markdown("Map CSV columns to PDF form fields:")
+# Calculate X position based on alignment
+def calculate_x_position(alignment, image_width, text_width, margin=10):
+    if alignment == "Left":
+        return margin
+    elif alignment == "Center":
+        return (image_width - text_width) // 2
+    elif alignment == "Right":
+        return image_width - text_width - margin
 
-    mapping = {}
-    for field in field_names:
-        selected_column = st.selectbox(f"Map PDF field '{field}' to CSV column:", options=["--None--"] + list(df.columns), key=field)
-        if selected_column != "--None--":
-            mapping[field] = selected_column
+# Show live preview
+if template_file:
+    try:
+        template = Image.open(template_file).convert("RGB")
+        width, height = template.size
+        y_pos = int((y_percent / 100) * height)
 
-    flatten = st.checkbox("🔒 Flatten PDFs before converting to JPEG", value=True)
+        preview = template.copy()
+        draw = ImageDraw.Draw(preview)
+        font = load_default_font(font_size)
 
-    if st.button("Generate JPEGs"):
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            jpeg_paths = []
+        bbox = draw.textbbox((0, 0), preview_name, font=font)
+        text_width = bbox[2] - bbox[0]
+        x_pos = calculate_x_position(alignment, width, text_width)
 
-            for index, row in df.iterrows():
-                data_dict = {pdf_field: str(row[csv_col]) for pdf_field, csv_col in mapping.items()}
-                filled_pdf_path = os.path.join(tmp_dir, f"{row[mapping[field_names[0]]]}_filled.pdf")
+        draw.text((x_pos, y_pos), preview_name, font=font, fill=font_color)
+        st.image(preview, caption="Live Preview", use_container_width=True)
 
-                # Fill and optionally flatten
-                fillpdfs.write_fillable_pdf(template_path, filled_pdf_path, data_dict)
-                if flatten:
-                    fillpdfs.flatten_pdf(filled_pdf_path, filled_pdf_path)
+    except Exception as e:
+        st.error(f"Preview error: {e}")
 
-                # Convert to JPEG
-                images = convert_from_path(filled_pdf_path, dpi=200)
-                for i, img in enumerate(images):
-                    jpeg_path = os.path.join(tmp_dir, f"{row[mapping[field_names[0]]]}_page{i+1}.jpg")
-                    img.save(jpeg_path, "JPEG")
-                    jpeg_paths.append(jpeg_path)
+# Generate and zip invitations
+if st.button("Generate & Download Invitations"):
+    if not template_file or not csv_file:
+        st.error("Please upload both template image and CSV file.")
+    else:
+        try:
+            df = pd.read_csv(csv_file)
+            names = df.iloc[:, 0].dropna().tolist()
+            font = load_default_font(font_size)
 
-            # Create ZIP
-            zip_path = os.path.join(tmp_dir, "filled_jpegs.zip")
-            with zipfile.ZipFile(zip_path, "w") as zipf:
-                for jpeg in jpeg_paths:
-                    zipf.write(jpeg, arcname=os.path.basename(jpeg))
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+                for name in names:
+                    img = template.copy()
+                    draw = ImageDraw.Draw(img)
 
-            with open(zip_path, "rb") as f:
-                st.download_button("📥 Download All JPEGs as ZIP", f, file_name="filled_jpegs.zip", mime="application/zip")
+                    bbox = draw.textbbox((0, 0), name, font=font)
+                    text_width = bbox[2] - bbox[0]
+                    x_pos = calculate_x_position(alignment, width, text_width)
+                    y_pos = int((y_percent / 100) * height)
+
+                    draw.text((x_pos, y_pos), name, font=font, fill=font_color)
+
+                    img_bytes = io.BytesIO()
+                    img.save(img_bytes, format="JPEG")
+                    zipf.writestr(f"{name}.jpg", img_bytes.getvalue())
+
+            zip_buffer.seek(0)
+            st.success(f"✅ Generated {len(names)} invitations.")
+            st.download_button(
+                label="📦 Download ZIP",
+                data=zip_buffer,
+                file_name="invitations.zip",
+                mime="application/zip"
+            )
+
+        except Exception as e:
+            st.error(f"Generation error: {e}")
