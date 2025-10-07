@@ -1,4 +1,3 @@
 streamlit
+pillow
 pandas
-fillpdfs
-pdf2image
